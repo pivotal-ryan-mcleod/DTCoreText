@@ -59,6 +59,8 @@ NSString * const DTAttributedTextContentViewDidFinishLayoutNotification = @"DTAt
 @property (nonatomic, strong) NSMutableDictionary *customViewsForAttachmentsIndex;
 @property (nonatomic, strong) NSMutableSet *customViews;
 
+@property CGRect oldFrame;
+
 @property (nonatomic, strong) NSArray *accessibilityElements;
 
 - (void)removeAllCustomViews;
@@ -108,6 +110,7 @@ static Class _layerClassToUseForDTAttributedTextContentView = nil;
 
 - (void)setup
 {
+	self.oldFrame = self.frame;
 	self.contentMode = UIViewContentModeTopLeft; // to avoid bitmap scaling effect on resize
 	_shouldLayoutCustomSubviews = YES;
 	
@@ -434,12 +437,56 @@ static Class _layerClassToUseForDTAttributedTextContentView = nil;
 		}
 	}
 	
+	[self handleFrameChange];
+	
 	if (_shouldLayoutCustomSubviews)
 	{
 		[self layoutSubviewsInRect:CGRectInfinite];
 	}
-  
-    [super layoutSubviews];
+	
+	self.oldFrame = self.frame;
+	[super layoutSubviews];
+}
+
+- (void)handleFrameChange
+{
+	if (!_layoutFrame)
+	{
+		return;
+	}
+	
+	// having a layouter means we are responsible for layouting yourselves
+	
+	// relayout based on relayoutMask
+	
+	BOOL shouldRelayout = NO;
+	
+	if (_relayoutMask & DTAttributedTextContentViewRelayoutOnHeightChanged)
+	{
+		if (self.oldFrame.size.height != self.frame.size.height)
+		{
+			shouldRelayout = YES;
+		}
+	}
+	
+	if (_relayoutMask & DTAttributedTextContentViewRelayoutOnWidthChanged)
+	{
+		if (self.oldFrame.size.width != self.frame.size.width)
+		{
+			shouldRelayout = YES;
+		}
+	}
+	
+	if (shouldRelayout)
+	{
+		[self relayoutText];
+	}
+	
+	if (self.oldFrame.size.height < self.frame.size.height)
+	{
+		// need to draw the newly visible area
+		[self setNeedsDisplayInRect:CGRectMake(0, self.oldFrame.size.height, self.bounds.size.width, self.frame.size.height - self.oldFrame.size.height)];
+	}
 }
 
 - (void)drawLayer:(CALayer *)layer inContext:(CGContextRef)ctx
@@ -697,51 +744,6 @@ static Class _layerClassToUseForDTAttributedTextContentView = nil;
 		{
 			[self invalidateIntrinsicContentSize];
 		}
-	}
-}
-
-- (void)setFrame:(CGRect)frame
-{
-	CGRect oldFrame = self.frame;
-	
-	[super setFrame:frame];
-	
-	if (!_layoutFrame)
-	{
-		return;
-	}
-	
-	// having a layouter means we are responsible for layouting yourselves
-	
-	// relayout based on relayoutMask
-	
-	BOOL shouldRelayout = NO;
-	
-	if (_relayoutMask & DTAttributedTextContentViewRelayoutOnHeightChanged)
-	{
-		if (oldFrame.size.height != frame.size.height)
-		{
-			shouldRelayout = YES;
-		}
-	}
-	
-	if (_relayoutMask & DTAttributedTextContentViewRelayoutOnWidthChanged)
-	{
-		if (oldFrame.size.width != frame.size.width)
-		{
-			shouldRelayout = YES;
-		}
-	}
-	
-	if (shouldRelayout)
-	{
-		[self relayoutText];
-	}
-	
-	if (oldFrame.size.height < frame.size.height)
-	{
-		// need to draw the newly visible area
-		[self setNeedsDisplayInRect:CGRectMake(0, oldFrame.size.height, self.bounds.size.width, frame.size.height - oldFrame.size.height)];
 	}
 }
 
